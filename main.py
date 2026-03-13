@@ -1,31 +1,32 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
 from models import Book
-from database import db_books  # استيراد القائمة من ملفها الجديد
+from database import get_db, BookDB
 
 app = FastAPI()
 
-# 1. رابط الصفحة الرئيسية (GET)
+# 1. رابط الصفحة الرئيسية
 @app.get("/")
 def home():
-    return {"message": "مرحباً بك في نظام إدارة الكتب!"}
+    return {"message": "مرحباً بك في نظام إدارة الكتب الاحترافي!"}
 
-# 2. رابط عرض كل الكتب (GET) 
+# 2. رابط عرض كل الكتب من قاعدة البيانات
 @app.get("/books")
-def get_all_books():
-    return db_books # إرجاع البيانات بصيغة JSON تلقائياً
+def get_all_books(db: Session = Depends(get_db)):
+    books = db.query(BookDB).all()
+    return books
 
-# 3. رابط إضافة كتاب جديد (POST) 
+# 3. رابط إضافة كتاب جديد وحفظه في الملف
 @app.post("/books")
-def create_book(book: Book):
-    # التحقق من أن الرقم التعريفي (ID) غير مكرر - Error Handling 
-    for existing_book in db_books:
-        if existing_book["id"] == book.id:
-            raise HTTPException(status_code=400, detail="هذا الرقم التعريفي (ID) موجود مسبقاً، يرجى استخدام رقم آخر.")
+def create_book(book: Book, db: Session = Depends(get_db)):
+    # التأكد من أن الـ ID غير مكرر في قاعدة البيانات
+    db_book = db.query(BookDB).filter(BookDB.id == book.id).first()
+    if db_book:
+        raise HTTPException(status_code=400, detail="هذا الرقم التعريفي (ID) موجود مسبقاً")
     
-    # تحويل البيانات القادمة من المتدرب/المستخدم إلى قاموس (Dictionary)g 
-    new_book_data = book.dict()
-    
-    # إضافة الكتاب للقائمة (قاعدة البيانات الوهمية)
-    db_books.append(new_book_data)
-    
-    return {"message": "تم إضافة الكتاب بنجاح!", "book": new_book_data}
+    # تحويل بيانات الكتاب وحفظها
+    new_book = BookDB(id=book.id, title=book.title, author=book.author, year=book.year)
+    db.add(new_book)
+    db.commit()
+    db.refresh(new_book)
+    return {"message": "تم حفظ الكتاب بنجاح في قاعدة البيانات!", "book": new_book}
