@@ -45,3 +45,38 @@ def get_book(book_id: int, db: Session = Depends(get_db)):
     if not book:
         raise HTTPException(status_code=404, detail="عذراً، الكتاب غير موجود")
     return book
+
+
+# 5. رابط تحديث بيانات كتاب (PUT)
+@app.put("/books/{book_id}")
+def update_book(book_id: int, updated_book: BookCreate, db: Session = Depends(get_db)):
+    book_query = db.query(BookDB).filter(BookDB.id == book_id)
+    existing_book = book_query.first()
+    if not existing_book:
+        raise HTTPException(status_code=404, detail="الكتاب غير موجود لتحديثه")
+    try:
+        book_query.update({
+            "title": updated_book.title,
+            "author": updated_book.author,
+            "year": updated_book.year
+        }, synchronize_session=False)
+        db.commit()
+        return {"message": "تم التحديث بنجاح!", "book": updated_book}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="خطأ في التحديث")
+
+
+# 6. رابط حذف كتاب نهائياً (DELETE)
+@app.delete("/books/{book_id}")
+def delete_book(book_id: int, db: Session = Depends(get_db)):
+    book = db.query(BookDB).filter(BookDB.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="الكتاب غير موجود لحذفه")
+    try:
+        db.delete(book)
+        db.commit()
+        return {"message": f"تم حذف الكتاب رقم {book_id} بنجاح!"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="خطأ في الحذف")
